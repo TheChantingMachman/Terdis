@@ -91,7 +91,7 @@
     When execute() receives an empty args slice (no command token),
     it returns "(error) ERR no command provided" without panicking.
   tags: [commands, dispatch, edge-case, core]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -104,7 +104,7 @@
     With one argument, returns that argument as-is. More than one argument
     returns "(error) ERR wrong number of arguments for 'PING' command".
   tags: [commands, ping, read, string]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -115,7 +115,7 @@
     Takes exactly 1 argument; any other arity returns "(error) ERR wrong
     number of arguments for 'ECHO' command".
   tags: [commands, echo, read, string]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -128,7 +128,7 @@
     plain decimal string (e.g. "11"). Takes exactly 2 arguments; any other
     arity returns "(error) ERR wrong number of arguments for 'APPEND' command".
   tags: [commands, append, write, string]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -140,7 +140,7 @@
     returns "0". Takes exactly 1 argument; any other arity returns
     "(error) ERR wrong number of arguments for 'STRLEN' command".
   tags: [commands, strlen, read, string]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -153,7 +153,7 @@
     argument count is odd or zero, returns "(error) ERR wrong number of
     arguments for 'MSET' command".
   tags: [commands, mset, write, string, bulk]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -167,7 +167,7 @@
     key is required; zero arguments returns "(error) ERR wrong number of
     arguments for 'MGET' command".
   tags: [commands, mget, read, string, bulk]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
