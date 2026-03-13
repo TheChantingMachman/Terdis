@@ -316,6 +316,68 @@ def cmd_update(args):
         yaml.dump(entries, f, default_flow_style=False, sort_keys=False)
 
 
+def cmd_add(args):
+    spec_path = os.path.join(args.spec_dir, "spec.yaml")
+    if not os.path.exists(spec_path):
+        print(f"error: spec file not found: {spec_path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        with open(spec_path) as f:
+            raw_lines = f.readlines()
+    except OSError as e:
+        print(f"error: cannot read {spec_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Separate leading comment lines from yaml body
+    leading_comments = []
+    yaml_body_lines = []
+    in_comments = True
+    for line in raw_lines:
+        if in_comments and line.startswith("#"):
+            leading_comments.append(line)
+        else:
+            in_comments = False
+            yaml_body_lines.append(line)
+
+    yaml_body = "".join(yaml_body_lines)
+    try:
+        entries = yaml.safe_load(yaml_body)
+    except yaml.YAMLError as e:
+        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(entries, list):
+        entries = []
+
+    # Check for duplicate ID
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("id") == args.id:
+            print(f"error: entry with id '{args.id}' already exists", file=sys.stderr)
+            sys.exit(1)
+
+    # Build new entry
+    new_entry = {
+        "id": args.id,
+        "section": args.section,
+        "description": args.description,
+        "tags": [t.strip() for t in args.tags.split(",")],
+        "status": args.status,
+    }
+    if args.depends_on:
+        new_entry["depends_on"] = [t.strip() for t in args.depends_on.split(",")]
+    if args.constants:
+        constants = {}
+        for kv in args.constants:
+            key, _, value = kv.partition("=")
+            constants[key] = value
+        new_entry["constants"] = constants
+
+    entries.append(new_entry)
+
+    with open(spec_path, "w") as f:
+        f.writelines(leading_comments)
+        yaml.dump(entries, f, default_flow_style=False, sort_keys=False)
+
+
 def cmd_stale(args):
     current_entries = load_spec(args.spec_dir)
     snapshot = load_snapshot(args.snapshot)
@@ -523,6 +585,17 @@ def main():
     p_update.add_argument("--status", help="Set status field (draft|active|implemented).")
     p_update.add_argument("--set", action="append", metavar="key=value", help="Set an arbitrary field (may be used multiple times).")
     p_update.set_defaults(func=cmd_update)
+
+    # add
+    p_add = sub.add_parser("add", help="Append a new entry to spec.yaml.")
+    p_add.add_argument("--id", required=True, help="Entry ID (must be unique).")
+    p_add.add_argument("--section", required=True, help="Section name.")
+    p_add.add_argument("--description", required=True, help="Entry description.")
+    p_add.add_argument("--tags", required=True, help="Comma-separated tag list.")
+    p_add.add_argument("--status", default="draft", help="Status (draft|active|implemented). Default: draft.")
+    p_add.add_argument("--depends-on", help="Comma-separated list of entry IDs.")
+    p_add.add_argument("--constants", action="append", metavar="key=value", help="Constant key=value pair (may be repeated).")
+    p_add.set_defaults(func=cmd_add)
 
     # stale
     p_stale = sub.add_parser("stale", help="Find stale test files from spec changes.")
