@@ -1,14 +1,20 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod store;
+pub mod commands;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use store::Store;
+use commands::{cmd_set, cmd_get, cmd_del, cmd_exists};
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+pub fn execute(store: &mut Store, args: &[&str]) -> String {
+    if args.is_empty() {
+        return "(error) ERR unknown command ''".to_string();
+    }
+    let cmd = args[0];
+    let rest = &args[1..];
+    match cmd.to_uppercase().as_str() {
+        "SET" => cmd_set(store, rest),
+        "GET" => cmd_get(store, rest),
+        "DEL" => cmd_del(store, rest),
+        "EXISTS" => cmd_exists(store, rest),
+        _ => format!("(error) ERR unknown command '{}'", cmd),
     }
 }

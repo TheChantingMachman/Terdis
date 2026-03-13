@@ -31,7 +31,7 @@
     "(error) ERR unknown command '<name>'" where <name> is the command
     token as provided.
   tags: [store, key-value, core, dispatch]
-  status: draft
+  status: implemented
 
 - id: commands.set
   section: Commands
@@ -41,7 +41,7 @@
     exactly 2 arguments (key and value); any other arity returns
     "(error) ERR wrong number of arguments for 'SET' command".
   tags: [commands, set, write, core]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -53,7 +53,7 @@
     any other arity returns "(error) ERR wrong number of arguments for
     'GET' command".
   tags: [commands, get, read, core]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -66,7 +66,7 @@
     is required; zero arguments returns "(error) ERR wrong number of
     arguments for 'DEL' command".
   tags: [commands, del, write, core]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -79,6 +79,6 @@
     one key is required; zero arguments returns "(error) ERR wrong number
     of arguments for 'EXISTS' command".
   tags: [commands, exists, read, core]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
