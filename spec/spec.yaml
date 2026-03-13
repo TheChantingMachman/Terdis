@@ -82,3 +82,362 @@
   status: implemented
   depends_on:
     - store.kv_store
+
+# ─── DISPATCH EDGE CASES ────────────────────────────────────────────────────
+
+- id: commands.execute_empty
+  section: Commands
+  description: >
+    When execute() receives an empty args slice (no command token),
+    it returns "(error) ERR no command provided" without panicking.
+  tags: [commands, dispatch, edge-case, core]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+# ─── STRING COMMANDS ────────────────────────────────────────────────────────
+
+- id: commands.ping
+  section: Commands
+  description: >
+    PING [message] — via execute(). With no arguments, returns "PONG".
+    With one argument, returns that argument as-is. More than one argument
+    returns "(error) ERR wrong number of arguments for 'PING' command".
+  tags: [commands, ping, read, string]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.echo
+  section: Commands
+  description: >
+    ECHO message — via execute(). Returns the given message string as-is.
+    Takes exactly 1 argument; any other arity returns "(error) ERR wrong
+    number of arguments for 'ECHO' command".
+  tags: [commands, echo, read, string]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.append
+  section: Commands
+  description: >
+    APPEND key value — via execute(). If key exists, appends value to the
+    existing string. If key does not exist, creates it with the given value
+    (equivalent to SET). Returns the length of the resulting string as a
+    plain decimal string (e.g. "11"). Takes exactly 2 arguments; any other
+    arity returns "(error) ERR wrong number of arguments for 'APPEND' command".
+  tags: [commands, append, write, string]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.strlen
+  section: Commands
+  description: >
+    STRLEN key — via execute(). Returns the length of the string value
+    stored at key as a plain decimal string. If the key does not exist,
+    returns "0". Takes exactly 1 argument; any other arity returns
+    "(error) ERR wrong number of arguments for 'STRLEN' command".
+  tags: [commands, strlen, read, string]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.mset
+  section: Commands
+  description: >
+    MSET key value [key value ...] — via execute(). Sets multiple keys to
+    their respective values, overwriting any existing values. Always returns
+    "OK". Requires an even number of arguments (key-value pairs); if the
+    argument count is odd or zero, returns "(error) ERR wrong number of
+    arguments for 'MSET' command".
+  tags: [commands, mset, write, string, bulk]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.mget
+  section: Commands
+  description: >
+    MGET key [key ...] — via execute(). Returns the values of all specified
+    keys as a single string. Each value is on its own line. Keys that do not
+    exist produce "(nil)" for that position. Format example for
+    MGET k1 k2 k3 where k2 is missing: "val1\n(nil)\nval3". At least one
+    key is required; zero arguments returns "(error) ERR wrong number of
+    arguments for 'MGET' command".
+  tags: [commands, mget, read, string, bulk]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+# ─── INTEGER COMMANDS ───────────────────────────────────────────────────────
+
+- id: commands.incr
+  section: Commands
+  description: >
+    INCR key — via execute(). Increments the integer value stored at key
+    by 1. If the key does not exist, it is set to "0" before incrementing
+    (result is "1"). Returns the new value as a plain decimal string.
+    If the stored value cannot be parsed as an i64, returns
+    "(error) ERR value is not an integer or out of range". Takes exactly
+    1 argument.
+  tags: [commands, incr, write, integer]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.decr
+  section: Commands
+  description: >
+    DECR key — via execute(). Decrements the integer value stored at key
+    by 1. If the key does not exist, it is set to "0" before decrementing
+    (result is "-1"). Returns the new value as a plain decimal string.
+    If the stored value cannot be parsed as an i64, returns
+    "(error) ERR value is not an integer or out of range". Takes exactly
+    1 argument.
+  tags: [commands, decr, write, integer]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.incrby
+  section: Commands
+  description: >
+    INCRBY key increment — via execute(). Increments the integer value at
+    key by the given increment (which may be negative). If the key does not
+    exist, it is set to "0" before incrementing. Returns the new value as a
+    plain decimal string. If the stored value or increment cannot be parsed
+    as i64, returns "(error) ERR value is not an integer or out of range".
+    Takes exactly 2 arguments.
+  tags: [commands, incrby, write, integer]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.decrby
+  section: Commands
+  description: >
+    DECRBY key decrement — via execute(). Decrements the integer value at
+    key by the given decrement. If the key does not exist, it is set to "0"
+    before decrementing. Returns the new value as a plain decimal string.
+    If the stored value or decrement cannot be parsed as i64, returns
+    "(error) ERR value is not an integer or out of range". Takes exactly
+    2 arguments.
+  tags: [commands, decrby, write, integer]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+# ─── KEY MANAGEMENT COMMANDS ────────────────────────────────────────────────
+
+- id: commands.keys
+  section: Commands
+  description: >
+    KEYS pattern — via execute(). Returns all keys matching the given glob
+    pattern, one per line, sorted lexicographically. Supported glob chars:
+    * (match any sequence), ? (match one char). If no keys match, returns
+    "(empty)". Takes exactly 1 argument; any other arity returns
+    "(error) ERR wrong number of arguments for 'KEYS' command".
+  tags: [commands, keys, read, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.type_cmd
+  section: Commands
+  description: >
+    TYPE key — via execute(). Returns the type of the value at key. Since
+    Terdis only supports string values, returns "string" if the key exists
+    or "none" if it does not. Takes exactly 1 argument.
+  tags: [commands, type, read, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.rename
+  section: Commands
+  description: >
+    RENAME key newkey — via execute(). Renames key to newkey. If key does
+    not exist, returns "(error) ERR no such key". If newkey already exists,
+    its value is overwritten. Returns "OK" on success. Takes exactly
+    2 arguments.
+  tags: [commands, rename, write, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.renamenx
+  section: Commands
+  description: >
+    RENAMENX key newkey — via execute(). Renames key to newkey only if
+    newkey does not already exist. Returns "1" if renamed, "0" if newkey
+    already exists. If key does not exist, returns
+    "(error) ERR no such key". Takes exactly 2 arguments.
+  tags: [commands, renamenx, write, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.dbsize
+  section: Commands
+  description: >
+    DBSIZE — via execute(). Returns the number of keys in the store as a
+    plain decimal string (e.g. "5"). Takes no arguments; any arguments
+    returns "(error) ERR wrong number of arguments for 'DBSIZE' command".
+  tags: [commands, dbsize, read, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.flushdb
+  section: Commands
+  description: >
+    FLUSHDB — via execute(). Removes all keys from the store. Returns "OK".
+    Takes no arguments; any arguments returns "(error) ERR wrong number of
+    arguments for 'FLUSHDB' command".
+  tags: [commands, flushdb, write, key-management]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+# ─── TTL / EXPIRY ───────────────────────────────────────────────────────────
+
+- id: store.expiry
+  section: Store
+  description: >
+    Extend the Store to support key expiration. Add a second HashMap
+    mapping String keys to Instant deadlines. When a key has an expiry set
+    and the current time is past the deadline, the key is considered expired
+    and must be lazily removed on the next access (get, exists, or any
+    command that reads the key). Store gains methods: set_expiry(&mut self,
+    &str, Duration), get_ttl(&self, &str) -> Option<Duration> (None if no
+    expiry or key missing), remove_expiry(&mut self, &str),
+    is_expired(&self, &str) -> bool, and cleanup_expired(&mut self) which
+    removes all expired keys. All existing read commands (GET, EXISTS, KEYS,
+    TYPE, STRLEN) must check expiry before returning values.
+  tags: [store, expiry, ttl, core]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.expire
+  section: Commands
+  description: >
+    EXPIRE key seconds — via execute(). Sets a timeout on key. After the
+    timeout, the key is automatically deleted. seconds must be a positive
+    integer. Returns "1" if the timeout was set, "0" if the key does not
+    exist. If seconds is not a valid positive integer, returns
+    "(error) ERR value is not an integer or out of range". Takes exactly
+    2 arguments.
+  tags: [commands, expire, write, ttl]
+  status: draft
+  depends_on:
+    - store.expiry
+
+- id: commands.ttl
+  section: Commands
+  description: >
+    TTL key — via execute(). Returns the remaining time to live of a key
+    in seconds as a plain decimal string. Returns "-2" if the key does not
+    exist. Returns "-1" if the key exists but has no associated expiry.
+    Takes exactly 1 argument.
+  tags: [commands, ttl, read, ttl]
+  status: draft
+  depends_on:
+    - store.expiry
+
+- id: commands.persist
+  section: Commands
+  description: >
+    PERSIST key — via execute(). Removes the expiry from a key, making it
+    persist indefinitely. Returns "1" if the expiry was removed, "0" if the
+    key does not exist or has no expiry. Takes exactly 1 argument.
+  tags: [commands, persist, write, ttl]
+  status: draft
+  depends_on:
+    - store.expiry
+
+- id: commands.setex
+  section: Commands
+  description: >
+    SETEX key seconds value — via execute(). Sets key to value and sets
+    the expiry to the given number of seconds. seconds must be a positive
+    integer. Returns "OK". If seconds is not valid, returns
+    "(error) ERR value is not an integer or out of range". Takes exactly
+    3 arguments.
+  tags: [commands, setex, write, ttl, string]
+  status: draft
+  depends_on:
+    - store.expiry
+
+# ─── RESP PROTOCOL ──────────────────────────────────────────────────────────
+
+- id: protocol.resp_parser
+  section: Protocol
+  description: >
+    Implement a RESP (Redis Serialization Protocol) parser that reads from
+    a byte buffer and produces parsed commands. Supported types: Simple
+    String (+OK\r\n), Error (-ERR message\r\n), Integer (:42\r\n),
+    Bulk String ($5\r\nhello\r\n), Null Bulk String ($-1\r\n), and
+    Array (*2\r\n$3\r\nGET\r\n$3\r\nkey\r\n). The parser should operate
+    on &[u8] and return a Result with the parsed value and bytes consumed,
+    or an error if the buffer is incomplete or malformed. Define an enum
+    RespValue with variants SimpleString(String), Error(String), Integer(i64),
+    BulkString(String), Null, Array(Vec<RespValue>). Implement
+    parse(input: &[u8]) -> Result<(RespValue, usize), RespError> where
+    RespError has variants Incomplete and Invalid(String).
+  tags: [protocol, resp, parser, core]
+  status: draft
+
+- id: protocol.resp_encoder
+  section: Protocol
+  description: >
+    Implement a RESP encoder that converts response strings from execute()
+    into proper RESP wire format. Implement encode_response(response: &str)
+    -> Vec<u8>. Rules: if response starts with "(error) ", encode as RESP
+    Error (-ERR ...\r\n). If response equals "(nil)", encode as Null Bulk
+    String ($-1\r\n). If response can be parsed as i64, encode as RESP
+    Integer (:N\r\n). If response contains newlines (multi-value like MGET),
+    split on \n and encode as RESP Array of Bulk Strings. Otherwise encode
+    as Bulk String ($len\r\nvalue\r\n). Also implement
+    encode_value(value: &RespValue) -> Vec<u8> for encoding arbitrary
+    RespValue enums to wire bytes.
+  tags: [protocol, resp, encoder, core]
+  status: draft
+
+# ─── NETWORKING ─────────────────────────────────────────────────────────────
+
+- id: server.tcp_listener
+  section: Server
+  description: >
+    Implement a TCP server that listens on a configurable address (default
+    127.0.0.1:6379). Accept connections and spawn a task per connection.
+    Each connection reads RESP-encoded commands from the socket, parses them
+    with the RESP parser, extracts the command args as strings, calls
+    execute() on a shared Store, encodes the response with the RESP encoder,
+    and writes it back to the socket. The Store must be shared across all
+    connections using Arc<Mutex<Store>>. The server runs until interrupted.
+    Use std::net::TcpListener with std::thread::spawn (no async runtime).
+  tags: [server, tcp, networking, core]
+  status: draft
+  depends_on:
+    - protocol.resp_parser
+    - protocol.resp_encoder
+    - store.kv_store
+
+- id: server.client_handler
+  section: Server
+  description: >
+    Implement the per-connection client handler. It reads from the TCP
+    stream into a buffer, calls the RESP parser to extract complete commands,
+    dispatches via execute(), encodes responses, and writes back. Handle
+    partial reads by buffering (a command may arrive across multiple TCP
+    segments). On parse error, send a RESP Error and continue reading.
+    On connection close (read returns 0 bytes), clean up and exit the
+    handler. The handler function signature is
+    handle_client(stream: TcpStream, store: Arc<Mutex<Store>>).
+  tags: [server, client, networking, core]
+  status: draft
+  depends_on:
+    - server.tcp_listener
