@@ -14,6 +14,6 @@
     "src_exclude": [],
     "test_pattern": "tests/**/*.rs",
     "planner_hint": "Terdis is a Rust reimplementation of Redis. Core data structures and command handling live in src/. The project uses Cargo — a Cargo.toml must exist at the repo root. Integration tests go in tests/. The pipeline runs `cargo test` with JSON output.",
-    "test_hint": "Write integration tests in tests/ as separate .rs files. Each file is a test binary — do not add a main(). Use #[test] attribute. Reference the crate by name (use terdis::...). Keep tests focused on one spec entry per file.",
+    "test_hint": "Write integration tests in tests/ as separate .rs files. Each file is a test binary — do not add a main(). Use #[test] attribute. Reference the crate by name (use terdis::...). Keep tests focused on one spec entry per file. Rust API conventions: methods that borrow from a struct (e.g. get) typically return Option<&str> not Option<String> — compare against string literals (Some(\"val\")), not Some(\"val\".to_string()). Methods that take ownership or produce new strings return String or Option<String>. Match your assertions to the natural Rust return type.",
     "coding_hint": "Implement in src/. Use safe Rust only. No external dependencies beyond what is already in Cargo.toml — do not add new crate dependencies. Expose all types and functions needed by tests as pub."
 }
