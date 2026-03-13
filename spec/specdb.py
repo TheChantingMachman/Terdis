@@ -10,6 +10,8 @@ import json
 import os
 import sys
 
+VALID_STATUSES = frozenset({"draft", "active", "implemented", "deprecated"})
+
 SPEC_STARTER_TEMPLATE = """\
 # spec/spec.yaml — [Project Name] specification
 #
@@ -20,7 +22,7 @@ SPEC_STARTER_TEMPLATE = """\
 # specdb commands — they do not read this file directly.
 # specdb is installed on the build server. Reference: https://github.com/TheChantingMachman/SpecDB
 #
-# LIFECYCLE: draft → active → implemented
+# LIFECYCLE: draft → active → implemented | deprecated
 # Run `specdb query --status draft --format brief` to see remaining work.
 
 # ─── REPLACE THIS SECTION WITH YOUR PROJECT'S ENTRIES ───────────────────────
@@ -118,6 +120,90 @@ except ImportError:
     sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# Raw file I/O helpers for round-trip preservation
+# ---------------------------------------------------------------------------
+
+def _split_leading_comments(raw_lines):
+    """Split raw lines into (leading_comments, body_lines).
+
+    leading_comments: lines at the top of the file that start with '#'.
+    body_lines: all remaining lines (includes blank separator and entries).
+    """
+    leading_comments = []
+    body_lines = []
+    in_comments = True
+    for line in raw_lines:
+        if in_comments and line.startswith("#"):
+            leading_comments.append(line)
+        else:
+            in_comments = False
+            body_lines.append(line)
+    return leading_comments, body_lines
+
+
+def _find_entry_starts(body_lines):
+    """Return indices in body_lines where each top-level YAML list entry starts.
+
+    A top-level entry starts with '- ' at column 0.
+    """
+    starts = []
+    for i, line in enumerate(body_lines):
+        if line.startswith("- ") or line.rstrip("\n") == "-":
+            starts.append(i)
+    return starts
+
+
+def _entry_range(body_lines, entry_starts, idx):
+    """Return (start, end) slice indices for entry at position idx."""
+    start = entry_starts[idx]
+    end = entry_starts[idx + 1] if idx + 1 < len(entry_starts) else len(body_lines)
+    return start, end
+
+
+def _serialize_entry(entry):
+    """Serialize a single entry dict to a YAML string (list-item format)."""
+    return yaml.dump([entry], default_flow_style=False, sort_keys=False)
+
+
+def _parse_spec_file(spec_path):
+    """Read spec.yaml and return (leading_comments, body_lines, entries).
+
+    entries is the parsed list of dicts (may include invalid ones).
+    Exits on I/O or YAML errors.
+    """
+    try:
+        with open(spec_path) as f:
+            raw_lines = f.readlines()
+    except OSError as e:
+        print(f"error: cannot read {spec_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    leading_comments, body_lines = _split_leading_comments(raw_lines)
+
+    yaml_body = "".join(body_lines)
+    try:
+        entries = yaml.safe_load(yaml_body)
+    except yaml.YAMLError as e:
+        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not isinstance(entries, list):
+        entries = []
+
+    return leading_comments, body_lines, entries
+
+
+def _write_spec_file(spec_path, leading_comments, body_lines):
+    """Write leading_comments + body_lines to spec_path."""
+    with open(spec_path, "w") as f:
+        f.writelines(leading_comments)
+        f.writelines(body_lines)
+
+
+# ---------------------------------------------------------------------------
+# Spec loading (for read-only commands)
+# ---------------------------------------------------------------------------
+
 def load_spec(spec_dir):
     """Load and parse spec/spec.yaml from spec_dir. Returns list of entry dicts."""
     spec_path = os.path.join(spec_dir, "spec.yaml")
@@ -157,6 +243,10 @@ def format_entries(entries, fmt):
             print(yaml.dump(entries, default_flow_style=False, sort_keys=False), end="")
 
 
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
 def cmd_query(args):
     entries = load_spec(args.spec_dir)
     if args.id:
@@ -183,15 +273,25 @@ def cmd_sections(args):
 
 def cmd_tags(args):
     entries = load_spec(args.spec_dir)
-    all_tags = set()
-    for e in entries:
-        all_tags.update(e.get("tags", []))
-    for t in sorted(all_tags):
-        print(t)
+    if getattr(args, "with_counts", False):
+        tag_counts = {}
+        for e in entries:
+            for t in e.get("tags", []):
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        # Sort by count descending, then tag alphabetically
+        sorted_tags = sorted(tag_counts.items(), key=lambda x: (-x[1], x[0]))
+        for tag, count in sorted_tags:
+            print(f"{count}\t{tag}")
+    else:
+        all_tags = set()
+        for e in entries:
+            all_tags.update(e.get("tags", []))
+        for t in sorted(all_tags):
+            print(t)
 
 
 def load_snapshot(path):
-    """Load a spec snapshot from an arbitrary YAML file path. Returns list of entry dicts."""
+    """Load a spec snapshot from an arbitrary YAML file path. Returns dict of id -> entry."""
     if not os.path.exists(path):
         print(f"error: snapshot file not found: {path}", file=sys.stderr)
         sys.exit(1)
@@ -228,11 +328,16 @@ def format_diff(changes, fmt):
 def cmd_diff(args):
     current_entries = load_spec(args.spec_dir)
     snapshot = load_snapshot(args.snapshot)
-    current = {e["id"]: e for e in current_entries}
+
+    # Full current map (including deprecated) — needed for removed-entry check
+    current_all = {e["id"]: e for e in current_entries}
+    # Active (non-deprecated) current entries — only these appear in diff output
+    current_active = {eid: e for eid, e in current_all.items()
+                      if e.get("status") != "deprecated"}
 
     changes = []
 
-    for eid, entry in current.items():
+    for eid, entry in current_active.items():
         if eid not in snapshot:
             changes.append({"change_type": "added", **entry})
         elif entry != snapshot[eid]:
@@ -243,9 +348,13 @@ def cmd_diff(args):
                     continue  # status-only change — pipeline transition, not human edit
             changes.append({"change_type": "modified", "id": eid, "old": snapshot[eid], "new": entry})
 
-    for eid, entry in snapshot.items():
-        if eid not in current:
-            changes.append({"change_type": "removed", **entry})
+    for eid, snap_entry in snapshot.items():
+        if eid not in current_all:
+            # Truly removed from spec — skip if it was deprecated in snapshot
+            if snap_entry.get("status") != "deprecated":
+                changes.append({"change_type": "removed", **snap_entry})
+        # If eid is in current but deprecated: already excluded from current_active,
+        # so it won't appear as modified. And it's not "removed" either.
 
     format_diff(changes, args.format)
 
@@ -255,32 +364,13 @@ def cmd_update(args):
     if not os.path.exists(spec_path):
         print(f"error: spec file not found: {spec_path}", file=sys.stderr)
         sys.exit(1)
-    try:
-        with open(spec_path) as f:
-            raw_lines = f.readlines()
-    except OSError as e:
-        print(f"error: cannot read {spec_path}: {e}", file=sys.stderr)
-        sys.exit(1)
 
-    # Separate leading comment lines from yaml body
-    leading_comments = []
-    yaml_body_lines = []
-    in_comments = True
-    for line in raw_lines:
-        if in_comments and line.startswith("#"):
-            leading_comments.append(line)
-        else:
-            in_comments = False
-            yaml_body_lines.append(line)
-
-    yaml_body = "".join(yaml_body_lines)
-    try:
-        entries = yaml.safe_load(yaml_body)
-    except yaml.YAMLError as e:
-        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
-        sys.exit(1)
-    if not isinstance(entries, list):
-        print(f"error: {spec_path} must be a YAML list of entries", file=sys.stderr)
+    # Validate status before any I/O
+    if args.status and args.status not in VALID_STATUSES:
+        print(
+            f"error: invalid status '{args.status}': must be one of {sorted(VALID_STATUSES)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Check for immutable id field before any file I/O
@@ -291,29 +381,46 @@ def cmd_update(args):
                 print("error: 'id' is immutable and cannot be changed with --set", file=sys.stderr)
                 sys.exit(1)
 
-    # Find entry by id
-    target = None
-    for entry in entries:
+    leading_comments, body_lines, entries = _parse_spec_file(spec_path)
+
+    # Find target entry by id
+    target_idx = None
+    target_entry = None
+    for i, entry in enumerate(entries):
         if isinstance(entry, dict) and entry.get("id") == args.id:
-            target = entry
+            target_idx = i
+            target_entry = entry
             break
-    if target is None:
+    if target_entry is None:
         print(f"error: entry not found: {args.id}", file=sys.stderr)
         sys.exit(1)
 
-    # Apply --status
+    # Apply changes to the entry dict
     if args.status:
-        target["status"] = args.status
-
-    # Apply --set key=value pairs
+        target_entry["status"] = args.status
     if args.set:
         for kv in args.set:
             key, _, value = kv.partition("=")
-            target[key] = value
+            target_entry[key] = value
 
-    with open(spec_path, "w") as f:
-        f.writelines(leading_comments)
-        yaml.dump(entries, f, default_flow_style=False, sort_keys=False)
+    # Round-trip: find raw line boundaries for this entry
+    entry_starts = _find_entry_starts(body_lines)
+    start, end = _entry_range(body_lines, entry_starts, target_idx)
+
+    # Preserve trailing blank lines from original range (inter-entry separators)
+    trailing_blanks = []
+    for line in reversed(body_lines[start:end]):
+        if line.strip() == "":
+            trailing_blanks.insert(0, line)
+        else:
+            break
+
+    # Serialize only the modified entry
+    new_yaml_lines = _serialize_entry(target_entry).splitlines(keepends=True)
+
+    # Splice: untouched prefix + new entry + original trailing blanks + untouched suffix
+    new_body = body_lines[:start] + new_yaml_lines + trailing_blanks + body_lines[end:]
+    _write_spec_file(spec_path, leading_comments, new_body)
 
 
 def cmd_add(args):
@@ -321,32 +428,16 @@ def cmd_add(args):
     if not os.path.exists(spec_path):
         print(f"error: spec file not found: {spec_path}", file=sys.stderr)
         sys.exit(1)
-    try:
-        with open(spec_path) as f:
-            raw_lines = f.readlines()
-    except OSError as e:
-        print(f"error: cannot read {spec_path}: {e}", file=sys.stderr)
+
+    # Validate status before any I/O
+    if args.status not in VALID_STATUSES:
+        print(
+            f"error: invalid status '{args.status}': must be one of {sorted(VALID_STATUSES)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    # Separate leading comment lines from yaml body
-    leading_comments = []
-    yaml_body_lines = []
-    in_comments = True
-    for line in raw_lines:
-        if in_comments and line.startswith("#"):
-            leading_comments.append(line)
-        else:
-            in_comments = False
-            yaml_body_lines.append(line)
-
-    yaml_body = "".join(yaml_body_lines)
-    try:
-        entries = yaml.safe_load(yaml_body)
-    except yaml.YAMLError as e:
-        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
-        sys.exit(1)
-    if not isinstance(entries, list):
-        entries = []
+    leading_comments, body_lines, entries = _parse_spec_file(spec_path)
 
     # Check for duplicate ID
     for entry in entries:
@@ -371,11 +462,171 @@ def cmd_add(args):
             constants[key] = value
         new_entry["constants"] = constants
 
-    entries.append(new_entry)
+    # Serialize the new entry
+    new_yaml_lines = _serialize_entry(new_entry).splitlines(keepends=True)
 
-    with open(spec_path, "w") as f:
-        f.writelines(leading_comments)
-        yaml.dump(entries, f, default_flow_style=False, sort_keys=False)
+    # Strip trailing blank lines from body, then add exactly one blank separator
+    stripped_body = list(body_lines)
+    while stripped_body and stripped_body[-1].strip() == "":
+        stripped_body.pop()
+
+    new_body = stripped_body + ["\n"] + new_yaml_lines
+    _write_spec_file(spec_path, leading_comments, new_body)
+
+
+def cmd_remove(args):
+    spec_path = os.path.join(args.spec_dir, "spec.yaml")
+    if not os.path.exists(spec_path):
+        print(f"error: spec file not found: {spec_path}", file=sys.stderr)
+        sys.exit(1)
+
+    leading_comments, body_lines, entries = _parse_spec_file(spec_path)
+
+    # Find target entry index
+    target_idx = None
+    for i, entry in enumerate(entries):
+        if isinstance(entry, dict) and entry.get("id") == args.id:
+            target_idx = i
+            break
+    if target_idx is None:
+        print(f"error: entry not found: {args.id}", file=sys.stderr)
+        sys.exit(1)
+
+    # Check which other entries depend on this one
+    dependents = []
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("id") != args.id:
+            if args.id in entry.get("depends_on", []):
+                dependents.append(entry["id"])
+
+    if dependents and not args.force:
+        print(
+            f"error: cannot remove '{args.id}': referenced by {dependents}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if dependents and args.force:
+        print(
+            f"warning: removing '{args.id}' which is referenced by: {dependents}",
+            file=sys.stderr,
+        )
+
+    # Round-trip: find raw line boundaries for this entry
+    entry_starts = _find_entry_starts(body_lines)
+    start, end = _entry_range(body_lines, entry_starts, target_idx)
+
+    # Remove entry range (includes the trailing blank line following the entry)
+    new_body = body_lines[:start] + body_lines[end:]
+    _write_spec_file(spec_path, leading_comments, new_body)
+
+
+def cmd_validate(args):
+    spec_path = os.path.join(args.spec_dir, "spec.yaml")
+    if not os.path.exists(spec_path):
+        print(f"error: spec file not found: {spec_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with open(spec_path) as f:
+            entries = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if not isinstance(entries, list):
+        print("error: spec.yaml must be a YAML list of entries", file=sys.stderr)
+        sys.exit(1)
+
+    issues = []
+    seen_ids = {}  # id -> index
+    all_ids = set()
+
+    # First pass: collect all IDs (for depends_on reference checking)
+    for entry in entries:
+        if isinstance(entry, dict) and "id" in entry:
+            all_ids.add(entry["id"])
+
+    required_fields = ("id", "section", "description", "tags", "status")
+
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            issues.append(f"<entry {i}>: not a dict")
+            continue
+
+        eid = entry.get("id", f"<entry {i}>")
+
+        # Required fields
+        for field in required_fields:
+            if field not in entry:
+                issues.append(f"{eid}: missing required field '{field}'")
+
+        # Valid status
+        status = entry.get("status")
+        if status is not None and status not in VALID_STATUSES:
+            issues.append(f"{eid}: invalid status '{status}'")
+
+        # Duplicate IDs
+        if "id" in entry:
+            if entry["id"] in seen_ids:
+                issues.append(f"{eid}: duplicate id (also at entry {seen_ids[entry['id']]})")
+            else:
+                seen_ids[entry["id"]] = i
+
+        # depends_on references must exist
+        for dep in entry.get("depends_on", []):
+            if dep not in all_ids:
+                issues.append(f"{eid}: depends_on references unknown id '{dep}'")
+
+        # tags must be a non-empty list
+        tags = entry.get("tags")
+        if tags is not None:
+            if not isinstance(tags, list):
+                issues.append(f"{eid}: tags must be a list")
+            elif len(tags) == 0:
+                issues.append(f"{eid}: tags list must have at least 1 element")
+
+    for issue in issues:
+        print(issue)
+
+    if issues:
+        sys.exit(1)
+
+
+def cmd_audit(args):
+    """Find test files missing @spec-tags: header in the first 10 lines."""
+    test_dir = args.test_dir
+    test_ext = args.test_ext
+
+    missing = []
+
+    if os.path.isdir(test_dir):
+        for root, dirs, files in os.walk(test_dir):
+            dirs.sort()
+            for fname in sorted(files):
+                if not fname.endswith(test_ext):
+                    continue
+                fpath = os.path.join(root, fname)
+                has_spec_tags = False
+                try:
+                    with open(fpath, errors="replace") as f:
+                        for i, line in enumerate(f):
+                            if i >= 10:
+                                break
+                            stripped = line.strip()
+                            if stripped.startswith("# @spec-tags:") or stripped.startswith("// @spec-tags:"):
+                                has_spec_tags = True
+                                break
+                except OSError:
+                    continue
+                if not has_spec_tags:
+                    missing.append(fpath)
+
+    if args.format == "json":
+        print(json.dumps(missing))
+    else:  # brief
+        for fpath in missing:
+            print(fpath)
 
 
 def cmd_stale(args):
@@ -551,7 +802,7 @@ def main():
     p_query.add_argument("--id", help="Return single entry by ID.")
     p_query.add_argument("--section", help="Filter by section (exact match).")
     p_query.add_argument("--tags", help="Filter by tags (comma-separated, any match).")
-    p_query.add_argument("--status", help="Filter by status (draft|active|implemented).")
+    p_query.add_argument("--status", help="Filter by status (draft|active|implemented|deprecated).")
     p_query.add_argument("--format", choices=["yaml", "json", "brief"], default="yaml", help="Output format.")
     p_query.set_defaults(func=cmd_query)
 
@@ -561,6 +812,12 @@ def main():
 
     # tags
     p_tags = sub.add_parser("tags", help="List all unique tags (sorted).")
+    p_tags.add_argument(
+        "--with-counts",
+        action="store_true",
+        default=False,
+        help="Output tab-separated count+tag, sorted by count descending then tag alphabetically.",
+    )
     p_tags.set_defaults(func=cmd_tags)
 
     # diff
@@ -582,8 +839,9 @@ def main():
     # update
     p_update = sub.add_parser("update", help="Modify a single spec entry in-place.")
     p_update.add_argument("--id", required=True, help="Entry ID to update.")
-    p_update.add_argument("--status", help="Set status field (draft|active|implemented).")
-    p_update.add_argument("--set", action="append", metavar="key=value", help="Set an arbitrary field (may be used multiple times).")
+    p_update.add_argument("--status", help="Set status field (draft|active|implemented|deprecated).")
+    p_update.add_argument("--set", action="append", metavar="key=value",
+                          help="Set an arbitrary field (may be used multiple times).")
     p_update.set_defaults(func=cmd_update)
 
     # add
@@ -592,10 +850,30 @@ def main():
     p_add.add_argument("--section", required=True, help="Section name.")
     p_add.add_argument("--description", required=True, help="Entry description.")
     p_add.add_argument("--tags", required=True, help="Comma-separated tag list.")
-    p_add.add_argument("--status", default="draft", help="Status (draft|active|implemented). Default: draft.")
+    p_add.add_argument("--status", default="draft",
+                       help="Status (draft|active|implemented|deprecated). Default: draft.")
     p_add.add_argument("--depends-on", help="Comma-separated list of entry IDs.")
-    p_add.add_argument("--constants", action="append", metavar="key=value", help="Constant key=value pair (may be repeated).")
+    p_add.add_argument("--constants", action="append", metavar="key=value",
+                       help="Constant key=value pair (may be repeated).")
     p_add.set_defaults(func=cmd_add)
+
+    # remove
+    p_remove = sub.add_parser("remove", help="Remove a spec entry by ID.")
+    p_remove.add_argument("--id", required=True, help="Entry ID to remove.")
+    p_remove.add_argument("--force", action="store_true",
+                          help="Remove even if other entries depend on this ID.")
+    p_remove.set_defaults(func=cmd_remove)
+
+    # validate
+    p_validate = sub.add_parser("validate", help="Validate spec.yaml for structural correctness.")
+    p_validate.set_defaults(func=cmd_validate)
+
+    # audit
+    p_audit = sub.add_parser("audit", help="Find test files missing @spec-tags: header.")
+    p_audit.add_argument("--test-dir", default="tests", help="Test directory to scan (default: tests/).")
+    p_audit.add_argument("--test-ext", default=".py", help="Test file extension (default: .py).")
+    p_audit.add_argument("--format", choices=["brief", "json"], default="brief")
+    p_audit.set_defaults(func=cmd_audit)
 
     # stale
     p_stale = sub.add_parser("stale", help="Find stale test files from spec changes.")
