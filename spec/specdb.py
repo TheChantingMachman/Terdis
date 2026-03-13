@@ -162,8 +162,107 @@ def _entry_range(body_lines, entry_starts, idx):
 
 
 def _serialize_entry(entry):
-    """Serialize a single entry dict to a YAML string (list-item format)."""
-    return yaml.dump([entry], default_flow_style=False, sort_keys=False)
+    """Serialize a single entry dict to a canonical YAML string (list-item format).
+
+    Uses a fixed field order and canonical formatting — not yaml.dump().
+    Returns a string ending with exactly one newline and no trailing blank line.
+    Callers are responsible for inter-entry blank line separators.
+    """
+    CANONICAL_FIELDS = ["id", "section", "description", "tags", "status", "depends_on", "constants"]
+
+    def needs_quoting(s):
+        s = str(s)
+        if s != s.strip():
+            return True
+        if ":" in s or "#" in s:
+            return True
+        return False
+
+    def plain_scalar(v):
+        s = str(v)
+        if needs_quoting(s):
+            escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
+        return s
+
+    def wrap_text(text, width=74):
+        """Word-wrap text to lines of at most `width` chars. Returns list of lines."""
+        words = text.split()
+        lines = []
+        current = []
+        current_len = 0
+        for word in words:
+            if current and current_len + 1 + len(word) > width:
+                lines.append(" ".join(current))
+                current = [word]
+                current_len = len(word)
+            else:
+                if current:
+                    current_len += 1 + len(word)
+                else:
+                    current_len = len(word)
+                current.append(word)
+        if current:
+            lines.append(" ".join(current))
+        return lines
+
+    def serialize_description(text):
+        """Return list of output lines for description folded scalar content."""
+        text = text.rstrip("\n")
+        paragraphs = text.split("\n\n")
+        all_lines = []
+        for i, para in enumerate(paragraphs):
+            if i > 0:
+                all_lines.append("")  # blank line separator between paragraphs
+            para_text = para.replace("\n", " ").strip()
+            if para_text:
+                all_lines.extend(wrap_text(para_text, width=74))
+        return all_lines
+
+    # Determine field order: canonical fields first, then extras in dict order
+    ordered_keys = [k for k in CANONICAL_FIELDS if k in entry]
+    ordered_keys += [k for k in entry if k not in CANONICAL_FIELDS]
+
+    output_lines = []
+    first_field = True
+
+    for key in ordered_keys:
+        value = entry[key]
+        # Skip None and empty collections
+        if value is None:
+            continue
+        if isinstance(value, (list, dict)) and len(value) == 0:
+            continue
+
+        indent = "- " if first_field else "  "
+        first_field = False
+
+        if key == "description":
+            desc_lines = serialize_description(str(value))
+            output_lines.append(f"{indent}description: >")
+            for dline in desc_lines:
+                if dline == "":
+                    output_lines.append("")
+                else:
+                    output_lines.append(f"    {dline}")
+        elif key == "tags":
+            tags_str = "[" + ", ".join(str(t) for t in value) + "]"
+            output_lines.append(f"{indent}tags: {tags_str}")
+        elif key == "depends_on":
+            output_lines.append(f"{indent}depends_on:")
+            for dep in value:
+                output_lines.append(f"  - {plain_scalar(dep)}")
+        elif key == "constants":
+            output_lines.append(f"{indent}constants:")
+            for k, v in value.items():
+                output_lines.append(f"    {k}: {plain_scalar(v)}")
+        else:
+            output_lines.append(f"{indent}{key}: {plain_scalar(value)}")
+
+    result = "\n".join(output_lines)
+    if not result.endswith("\n"):
+        result += "\n"
+    return result
 
 
 def _parse_spec_file(spec_path):
