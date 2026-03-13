@@ -49,6 +49,24 @@ python3 spec/specdb.py update --id commands.set --status active
 
 Only read `spec/spec.yaml` directly if specdb is broken or you need to fix YAML syntax errors.
 
+## Spec entry deletion policy
+
+**Never hard-delete spec entries.** The pipeline uses TDD — deleting an entry orphans its
+tests, breaking stale detection and preventing proper test refactoring.
+
+To retire a spec entry, deprecate it:
+```bash
+python3 spec/specdb.py update --id some.entry --status deprecated
+```
+
+Deprecated entries are ignored by pipeline agents (they query by `--status draft` or
+`--status active`) but remain visible to `specdb stale` and `specdb diff`, allowing tests
+to be properly flagged and cleaned up. The full lifecycle is:
+`draft → active → implemented → deprecated`
+
+Hard pruning of deprecated entries requires human review to confirm all dependent tests
+and entries have been updated first.
+
 ## Ownership boundaries
 
 | Directory | Owner | Notes |
