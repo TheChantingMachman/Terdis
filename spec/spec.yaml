@@ -21,20 +21,25 @@
 - id: store.kv_store
   section: Store
   description: >
-    The core data store is an in-memory hash map mapping String keys to String values.
-    Keys are case-sensitive, arbitrary byte strings (stored as Rust Strings).
-    Values are arbitrary byte strings (stored as Rust Strings).
-    The store starts empty. Duplicate keys overwrite the previous value.
-  tags: [store, key-value, core]
+    Implement a struct Store wrapping HashMap<String, String>. The store starts
+    empty. Keys are case-sensitive. Duplicate keys overwrite the previous value.
+    Public API: Store::new() -> Store, get(&self, &str) -> Option<&String>,
+    set(&mut self, String, String), del(&mut self, &str) -> bool,
+    exists(&self, &str) -> bool. Also implement a top-level function
+    execute(store: &mut Store, args: &[&str]) -> String that dispatches
+    commands by name (case-insensitive). Unknown commands return
+    "(error) ERR unknown command '<name>'" where <name> is the command
+    token as provided.
+  tags: [store, key-value, core, dispatch]
   status: draft
 
 - id: commands.set
   section: Commands
   description: >
-    SET key value — stores the given value at the given key, overwriting any
-    existing value. Always returns the string "OK". Key and value are both
-    required; missing either is an error returning "(error) ERR wrong number
-    of arguments for 'SET' command".
+    SET key value — via execute(), stores the given value at the given key,
+    overwriting any existing value. Returns the string "OK". SET takes
+    exactly 2 arguments (key and value); any other arity returns
+    "(error) ERR wrong number of arguments for 'SET' command".
   tags: [commands, set, write, core]
   status: draft
   depends_on:
@@ -43,9 +48,10 @@
 - id: commands.get
   section: Commands
   description: >
-    GET key — returns the value stored at key as a bulk string. If the key
-    does not exist, returns nil (Rust None). GET takes exactly one argument;
-    wrong arity returns "(error) ERR wrong number of arguments for 'GET' command".
+    GET key — via execute(), returns the value stored at key. If the key
+    does not exist, returns the string "(nil)". GET takes exactly 1 argument;
+    any other arity returns "(error) ERR wrong number of arguments for
+    'GET' command".
   tags: [commands, get, read, core]
   status: draft
   depends_on:
@@ -54,10 +60,11 @@
 - id: commands.del
   section: Commands
   description: >
-    DEL key [key ...] — removes the specified keys. Returns the integer count
-    of keys that were actually deleted (keys that did not exist are ignored and
-    not counted). At least one key is required; zero arguments returns
-    "(error) ERR wrong number of arguments for 'DEL' command".
+    DEL key [key ...] — via execute(), removes the specified keys. Returns
+    the count of keys actually deleted as a plain decimal string (e.g. "2").
+    Keys that did not exist are ignored and not counted. At least one key
+    is required; zero arguments returns "(error) ERR wrong number of
+    arguments for 'DEL' command".
   tags: [commands, del, write, core]
   status: draft
   depends_on:
@@ -66,9 +73,11 @@
 - id: commands.exists
   section: Commands
   description: >
-    EXISTS key [key ...] — returns the integer count of specified keys that exist.
-    Duplicate keys in the argument list are counted multiple times if they exist.
-    At least one key is required.
+    EXISTS key [key ...] — via execute(), returns the count of specified
+    keys that exist as a plain decimal string (e.g. "2"). Duplicate keys
+    in the argument list are counted multiple times if they exist. At least
+    one key is required; zero arguments returns "(error) ERR wrong number
+    of arguments for 'EXISTS' command".
   tags: [commands, exists, read, core]
   status: draft
   depends_on:
