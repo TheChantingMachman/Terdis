@@ -89,6 +89,24 @@ pub fn cmd_mset(store: &mut Store, args: &[&str]) -> String {
     "OK".to_string()
 }
 
+pub fn cmd_type(store: &Store, args: &[&str]) -> String {
+    if args.len() != 1 {
+        return "(error) ERR wrong number of arguments for 'TYPE' command".to_string();
+    }
+    if store.exists(args[0]) {
+        "string".to_string()
+    } else {
+        "none".to_string()
+    }
+}
+
+pub fn cmd_dbsize(store: &Store, args: &[&str]) -> String {
+    if !args.is_empty() {
+        return "(error) ERR wrong number of arguments for 'DBSIZE' command".to_string();
+    }
+    store.len().to_string()
+}
+
 pub fn cmd_mget(store: &Store, args: &[&str]) -> String {
     if args.is_empty() {
         return "(error) ERR wrong number of arguments for 'MGET' command".to_string();

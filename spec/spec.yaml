@@ -251,7 +251,7 @@
     Terdis only supports string values, returns "string" if the key exists
     or "none" if it does not. Takes exactly 1 argument.
   tags: [commands, type, read, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -286,7 +286,7 @@
     plain decimal string (e.g. "5"). Takes no arguments; any arguments
     returns "(error) ERR wrong number of arguments for 'DBSIZE' command".
   tags: [commands, dbsize, read, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
