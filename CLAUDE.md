@@ -5,6 +5,11 @@
 Terdis is a **Rust reimplementation of Redis**, built with the Dark Factory agentic TDD
 pipeline. `spec/` is human-owned. `src/` and `tests/` are pipeline-owned.
 
+## Branching strategy
+
+`main` is for major versioning only and is manually managed. **All work happens on `dev`.**
+Always verify you are on `dev` before making changes. Never push directly to `main`.
+
 ## Role boundaries
 
 This repo is for **AI pair programming**: spec authoring, reviewing pipeline output, and
@@ -43,10 +48,10 @@ Only read `spec/spec.yaml` directly if specdb is broken or you need to fix YAML 
 
 ## Spec entry deletion policy
 
-**Never hard-delete spec entries.** The pipeline uses TDD — deleting an entry orphans its
-tests, breaking stale detection and preventing proper test refactoring.
+**Never use `specdb remove`.** The effects of hard-deleting spec entries on the pipeline's
+TDD workflow are not fully understood and may cause orphaned tests, broken stale detection,
+or incorrect refactoring. Always deprecate instead:
 
-To retire a spec entry, deprecate it:
 ```bash
 python3 spec/specdb.py update --id some.entry --status deprecated
 ```
@@ -56,8 +61,8 @@ Deprecated entries are ignored by pipeline agents (they query by `--status draft
 to be properly flagged and cleaned up. The full lifecycle is:
 `draft → active → implemented → deprecated`
 
-Hard pruning of deprecated entries requires human review to confirm all dependent tests
-and entries have been updated first.
+Hard pruning of deprecated entries requires explicit human approval — do not do this
+autonomously.
 
 ## Ownership boundaries
 
