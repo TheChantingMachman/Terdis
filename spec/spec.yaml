@@ -20,13 +20,17 @@
 
 - id: store.kv_store
   section: Store
-  description: >
-    The core data store is an in-memory hash map mapping String keys to String values.
-    Keys are case-sensitive, arbitrary byte strings (stored as Rust Strings).
-    Values are arbitrary byte strings (stored as Rust Strings).
-    The store starts empty. Duplicate keys overwrite the previous value.
-  tags: [store, key-value, core]
-  status: draft
+  description: 'The core data store is an in-memory hash map mapping String keys to
+    String values. Keys are case-sensitive, arbitrary byte strings (stored as Rust
+    Strings). Values are arbitrary byte strings (stored as Rust Strings). The store
+    starts empty. Duplicate keys overwrite the previous value.
+
+    '
+  tags:
+  - store
+  - key-value
+  - core
+  status: implemented
 
 - id: commands.set
   section: Commands
