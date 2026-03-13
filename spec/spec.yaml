@@ -17,3 +17,59 @@
 # Description: be precise — include formulas, exact values, edge cases.
 #   The coding agent reads this directly. Vague descriptions produce wrong code.
 # ─────────────────────────────────────────────────────────────────────────────
+
+- id: store.kv_store
+  section: Store
+  description: >
+    The core data store is an in-memory hash map mapping String keys to String values.
+    Keys are case-sensitive, arbitrary byte strings (stored as Rust Strings).
+    Values are arbitrary byte strings (stored as Rust Strings).
+    The store starts empty. Duplicate keys overwrite the previous value.
+  tags: [store, key-value, core]
+  status: draft
+
+- id: commands.set
+  section: Commands
+  description: >
+    SET key value — stores the given value at the given key, overwriting any
+    existing value. Always returns the string "OK". Key and value are both
+    required; missing either is an error returning "(error) ERR wrong number
+    of arguments for 'SET' command".
+  tags: [commands, set, write, core]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.get
+  section: Commands
+  description: >
+    GET key — returns the value stored at key as a bulk string. If the key
+    does not exist, returns nil (Rust None). GET takes exactly one argument;
+    wrong arity returns "(error) ERR wrong number of arguments for 'GET' command".
+  tags: [commands, get, read, core]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.del
+  section: Commands
+  description: >
+    DEL key [key ...] — removes the specified keys. Returns the integer count
+    of keys that were actually deleted (keys that did not exist are ignored and
+    not counted). At least one key is required; zero arguments returns
+    "(error) ERR wrong number of arguments for 'DEL' command".
+  tags: [commands, del, write, core]
+  status: draft
+  depends_on:
+    - store.kv_store
+
+- id: commands.exists
+  section: Commands
+  description: >
+    EXISTS key [key ...] — returns the integer count of specified keys that exist.
+    Duplicate keys in the argument list are counted multiple times if they exist.
+    At least one key is required.
+  tags: [commands, exists, read, core]
+  status: draft
+  depends_on:
+    - store.kv_store

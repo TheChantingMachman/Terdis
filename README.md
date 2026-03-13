@@ -1,6 +1,6 @@
 # Terdis
 
-A Rust Tetris implementation built with the Dark Factory agentic TDD pipeline.
+A Rust reimplementation of Redis, built with the Dark Factory agentic TDD pipeline.
 
 ## Pipeline
 
