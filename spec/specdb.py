@@ -506,6 +506,44 @@ def cmd_update(args):
     entry_starts = _find_entry_starts(body_lines)
     start, end = _entry_range(body_lines, entry_starts, target_idx)
 
+    # Determine which fields actually changed (only the keys touched by this call)
+    changed_keys = set()
+    if args.status:
+        changed_keys.add("status")
+    if args.set:
+        for kv in args.set:
+            key, _, _ = kv.partition("=")
+            changed_keys.add(key)
+
+    # Simple scalar fields that can be safely spliced in-place without re-serializing
+    # the whole entry.  Structural fields (depends_on, constants, description, tags)
+    # require full re-serialization because their YAML representation spans multiple lines.
+    INLINE_SPLICEABLE = {"status", "section"}
+
+    if changed_keys and changed_keys.issubset(INLINE_SPLICEABLE):
+        # Build a mapping of field → new value for the changed keys
+        new_values = {}
+        if args.status:
+            new_values["status"] = args.status
+        if args.set:
+            for kv in args.set:
+                key, _, value = kv.partition("=")
+                if key in INLINE_SPLICEABLE:
+                    new_values[key] = value
+
+        # Splice only the specific lines that contain the changed fields
+        new_body = list(body_lines)
+        for line_idx in range(start, end):
+            stripped = new_body[line_idx].lstrip()
+            for field, new_val in new_values.items():
+                if stripped.startswith(f"{field}:"):
+                    indent = len(new_body[line_idx]) - len(stripped)
+                    new_body[line_idx] = " " * indent + f"{field}: {new_val}\n"
+                    break
+        _write_spec_file(spec_path, leading_comments, new_body)
+        return
+
+    # Full re-serialization for structural changes (description, tags, depends_on, constants)
     # Preserve trailing blank lines from original range (inter-entry separators)
     trailing_blanks = []
     for line in reversed(body_lines[start:end]):
@@ -514,7 +552,6 @@ def cmd_update(args):
         else:
             break
 
-    # Serialize only the modified entry
     new_yaml_lines = _serialize_entry(target_entry).splitlines(keepends=True)
 
     # Splice: untouched prefix + new entry + original trailing blanks + untouched suffix
@@ -626,18 +663,14 @@ def cmd_validate(args):
         print(f"error: spec file not found: {spec_path}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        with open(spec_path) as f:
-            entries = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        print(f"error: malformed YAML in {spec_path}: {e}", file=sys.stderr)
-        sys.exit(1)
+    leading_comments, body_lines, entries = _parse_spec_file(spec_path)
 
     if not isinstance(entries, list):
         print("error: spec.yaml must be a YAML list of entries", file=sys.stderr)
         sys.exit(1)
 
     issues = []
+    warnings = []
     seen_ids = {}  # id -> index
     all_ids = set()
 
@@ -685,8 +718,30 @@ def cmd_validate(args):
             elif len(tags) == 0:
                 issues.append(f"{eid}: tags list must have at least 1 element")
 
+    # Round-trip stability check: re-serialize each entry and compare to raw file content.
+    # Mismatches indicate quoting gaps or formatting drift that would cause cosmetic churn
+    # on the next structural update.  Emitted as warnings (not errors) since the data is valid.
+    entry_starts = _find_entry_starts(body_lines)
+    if len(entry_starts) == len(entries):
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            start, end = _entry_range(body_lines, entry_starts, i)
+            # Strip trailing blank lines from the raw range (inter-entry separators are not
+            # part of the entry's serialized form)
+            raw_content_end = end
+            while raw_content_end > start and body_lines[raw_content_end - 1].strip() == "":
+                raw_content_end -= 1
+            original = "".join(body_lines[start:raw_content_end])
+            reserialized = _serialize_entry(entry)
+            if original != reserialized:
+                eid = entry.get("id", f"<entry {i}>")
+                warnings.append(f"{eid}: round-trip mismatch — file format differs from canonical serialization (run 'specdb update --id {eid}' with a structural change to normalize)")
+
     for issue in issues:
         print(issue)
+    for warning in warnings:
+        print(f"warning: {warning}", file=sys.stderr)
 
     if issues:
         sys.exit(1)
