@@ -1,0 +1,14 @@
+# Rust / Cargo
+target/
+Cargo.lock
+
+# Pipeline artifacts (generated per build, stored in Jenkins)
+artifacts/
+build-artifacts/
+
+# Claude Code local state (session permissions, plans — machine-specific)
+.claude/
+
+# Environment / secrets
+.env
+*.env.local

@@ -1,0 +1,19 @@
+# spec/spec.yaml — Terdis specification
+#
+# AUTHORSHIP: Maintained by human + AI pair only. Pipeline agents must not
+# modify this file. src/ and tests/ are pipeline-owned; spec/ is human-owned.
+#
+# PIPELINE: This file is the authoritative spec. Pipeline agents access it via
+# specdb commands — they do not read this file directly.
+# specdb is available at spec/specdb.py in this repo.
+#
+# LIFECYCLE: draft → active → implemented
+# Run `python3 spec/specdb.py query --status draft --format brief` to see remaining work.
+#
+# ─── POPULATE ENTRIES BELOW ──────────────────────────────────────────────────
+#
+# Entry id convention: section_slug.feature_name (snake_case, dot-separated)
+# Tag convention: section slug + behavior tags (3-6 per entry, shared across entries)
+# Description: be precise — include formulas, exact values, edge cases.
+#   The coding agent reads this directly. Vague descriptions produce wrong code.
+# ─────────────────────────────────────────────────────────────────────────────

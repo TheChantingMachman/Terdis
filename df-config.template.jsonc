@@ -1,0 +1,318 @@
+// df-config.json — Dark Factory Pipeline Configuration
+//
+// Place this file (as df-config.json, without comments) in the ROOT of your
+// target repository. The pipeline reads it at checkout to configure all agents
+// and the test runner.
+//
+// ─── SETUP INSTRUCTIONS ────────────────────────────────────────────────────
+//
+// 1. Copy this template to your repo root as df-config.json (strip comments —
+//    JSON does not support them). Or ask your AI assistant:
+//    "Read df-config.template.jsonc from the pipeline repo and create a
+//     df-config.json for this project."
+//
+// 2. Fill in every field. The pipeline will fail fast if required fields are
+//    missing, so you'll know immediately what needs fixing.
+//
+// 3. Ensure your repo has the directories referenced below (src_dir, test_dir,
+//    spec_dir) and a spec file at spec_file.
+//
+// 4. Ensure the build server has the language toolchain installed (e.g.,
+//    rustc + cargo, g++ + catch2, node + npm, python3 + pytest).
+//
+// ─── FIELD REFERENCE ───────────────────────────────────────────────────────
+{
+    // ── Project identity ──────────────────────────────────────────────────
+    // Human-readable name shown in PR titles, build reports, and logs.
+    "project_name": "MyProject",
+
+    // ── Language & test framework ─────────────────────────────────────────
+    // "language" is injected into agent prompts so they generate idiomatic
+    // code. Use the common name: "rust", "cpp", "python", "typescript", etc.
+    "language": "rust",
+
+    // "test_framework" tells agents which assertion style and test structure
+    // to use. Examples: "cargo-test", "catch2", "pytest", "jest", "googletest"
+    "test_framework": "cargo-test",
+
+    // ── Directory layout ──────────────────────────────────────────────────
+    // Paths are relative to your repo root. Include trailing slashes.
+    //
+    // src_dir:  where implementation code lives — Coding Agent writes here
+    // test_dir: where test files live — Test Agent writes here
+    // spec_dir: where spec files live — all agents read from here
+    "src_dir": "src/",
+    "test_dir": "tests/",
+    "spec_dir": "spec/",
+
+    // Main spec file the pipeline tracks for build-vs-refactor mode detection.
+    // Path relative to repo root.
+    //
+    // Preferred: "spec/spec.yaml" — enables specdb CLI integration (structured queries,
+    //   stale test detection, targeted diffs). See https://github.com/TheChantingMachman/SpecDB
+    //   for the spec.yaml format and specdb installation.
+    //
+    // Legacy: "spec/core-spec.md" — markdown spec, no specdb integration. Agents read
+    //   the raw file. Still fully supported but lacks specdb acceleration.
+    "spec_file": "spec/spec.yaml",
+
+    // ── File extensions ───────────────────────────────────────────────────
+    // Used by agents when creating new files and by the test runner when
+    // discovering source/test files.
+    "src_ext": ".rs",
+    "test_ext": ".rs",
+
+    // ── Test runner configuration ─────────────────────────────────────────
+    // The pipeline's run-tests.sh uses these to compile (if needed) and
+    // run your test suite, then parse the output into qa-report.json.
+    //
+    // "build_test_cmd": Shell command to build and run tests. The pipeline
+    //   runs this from your repo root. It should exit 0 on all-pass, non-zero
+    //   on any failure. Capture stderr with 2>&1 if needed.
+    //
+    // "report_format": Tells the pipeline how to parse test output.
+    //   Supported formats:
+    //     "cargo-json"  — cargo test -- -Z unstable-options --format json
+    //     "catch2-xml"  — Catch2 XML reporter (--reporter xml::out=file.xml)
+    //     "junit-xml"   — JUnit XML (C#, Google Test, Java/Kotlin, Swift, etc.)
+    //     "go-json"     — go test -json
+    //     "pytest-json" — pytest --json-report (requires pytest-json-report)
+    //     "jest-json"   — jest --json
+    //     "exitcode"    — fallback: pass/fail based solely on exit code
+    //
+    //   If your framework isn't listed, use "exitcode" and the pipeline will
+    //   report pass/fail without individual test case details.
+    "build_test_cmd": "cargo test -- -Z unstable-options --format json 2>&1",
+    "report_format": "cargo-json",
+
+    // ── Agent domain boundaries ───────────────────────────────────────────
+    // These constrain what agents can read and write. Critical for isolation.
+    //
+    // "src_include": Glob patterns for files the Coding Agent may modify.
+    //   The agent will only write to files matching these patterns.
+    //   Use this to scope the agent to your domain code, excluding vendored
+    //   code, generated files, or human-owned modules.
+    "src_include": ["src/**/*.rs"],
+
+    // "src_exclude": Directories or patterns the agents must never touch.
+    //   Typically human-owned code like renderers, UI layers, or config.
+    //   Agents receive these as explicit "do NOT read or modify" instructions.
+    "src_exclude": ["src/renderer/"],
+
+    // "test_pattern": Glob for discovering test files (used by test runner
+    //   and Spec Diff Agent's full qa/ audit).
+    "test_pattern": "tests/**/*.rs",
+
+    // ── Agent prompt hints ────────────────────────────────────────────────
+    // Optional free-text hints injected into agent prompts. Use these to
+    // give agents project-specific context that doesn't fit elsewhere.
+    //
+    // "planner_hint": Extra context for the Planner/Spec Diff Agent.
+    //   Example: "The game uses an ECS architecture. Components are in src/components/."
+    "planner_hint": "",
+
+    // "test_hint": Extra context for the Test Agent.
+    //   Example: "Use test fixtures from tests/fixtures/ for board state setup."
+    "test_hint": "",
+
+    // "coding_hint": Extra context for the Coding Agent.
+    //   Example: "All public functions must return Result<T, GameError>."
+    "coding_hint": ""
+}
+
+// ─── EXAMPLES ──────────────────────────────────────────────────────────────
+//
+// C++ with Catch2:
+// {
+//   "project_name": "Terdis",
+//   "language": "cpp",
+//   "test_framework": "catch2",
+//   "src_dir": "src/",
+//   "test_dir": "qa/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".cpp",
+//   "test_ext": ".cpp",
+//   "build_test_cmd": "",
+//   "report_format": "catch2-xml",
+//   "src_include": ["src/custodian.hpp", "src/custodian.cpp"],
+//   "src_exclude": ["src/renderer/"],
+//   "test_pattern": "qa/**/*.cpp",
+//   "planner_hint": "",
+//   "test_hint": "",
+//   "coding_hint": ""
+// }
+//
+// Note: For C++ with Catch2, leave build_test_cmd empty — the pipeline's
+// run-tests.sh has a built-in Catch2 compilation step (g++ + link against
+// libCatch2Main). Set report_format to "catch2-xml".
+//
+// Python with pytest:
+// {
+//   "project_name": "MyPythonApp",
+//   "language": "python",
+//   "test_framework": "pytest",
+//   "src_dir": "src/",
+//   "test_dir": "tests/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".py",
+//   "test_ext": ".py",
+//   "build_test_cmd": "python -m pytest tests/ --json-report --json-report-file=test-results.json 2>&1",
+//   "report_format": "pytest-json",
+//   "src_include": ["src/**/*.py"],
+//   "src_exclude": ["src/migrations/"],
+//   "test_pattern": "tests/**/*.py",
+//   "planner_hint": "",
+//   "test_hint": "Use pytest fixtures. Parametrize where appropriate.",
+//   "coding_hint": "Type hints required on all public functions."
+// }
+//
+// TypeScript with Jest:
+// {
+//   "project_name": "MyTSApp",
+//   "language": "typescript",
+//   "test_framework": "jest",
+//   "src_dir": "src/",
+//   "test_dir": "__tests__/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".ts",
+//   "test_ext": ".test.ts",
+//   "build_test_cmd": "npx jest --json --outputFile=test-results.json 2>&1",
+//   "report_format": "jest-json",
+//   "src_include": ["src/**/*.ts"],
+//   "src_exclude": ["src/generated/"],
+//   "test_pattern": "__tests__/**/*.test.ts",
+//   "planner_hint": "",
+//   "test_hint": "",
+//   "coding_hint": ""
+// }
+//
+// C# with xUnit (uses junit-xml via JunitXml.TestLogger NuGet package):
+// {
+//   "project_name": "MyCSharpApp",
+//   "language": "csharp",
+//   "test_framework": "xunit",
+//   "src_dir": "src/",
+//   "test_dir": "tests/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".cs",
+//   "test_ext": ".cs",
+//   "build_test_cmd": "dotnet test --logger 'junit;LogFilePath=test-results.xml' 2>&1",
+//   "report_format": "junit-xml",
+//   "src_include": ["src/**/*.cs"],
+//   "src_exclude": [],
+//   "test_pattern": "tests/**/*.cs",
+//   "planner_hint": "",
+//   "test_hint": "Use xUnit [Fact] and [Theory] attributes.",
+//   "coding_hint": ""
+// }
+//
+// Note: For C# junit-xml, add JunitXml.TestLogger to your test project:
+//   dotnet add tests/MyApp.Tests.csproj package JunitXml.TestLogger
+// NUnit and MSTest also work — just change test_framework and test_hint.
+//
+// C++ with Google Test (uses junit-xml — native --gtest_output=xml):
+// {
+//   "project_name": "MyCppApp",
+//   "language": "cpp",
+//   "test_framework": "googletest",
+//   "src_dir": "src/",
+//   "test_dir": "tests/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".cpp",
+//   "test_ext": ".cpp",
+//   "build_test_cmd": "cmake --build build --target tests && ./build/tests/test_runner --gtest_output=xml:test-results.xml 2>&1",
+//   "report_format": "junit-xml",
+//   "src_include": ["src/**/*.cpp", "src/**/*.hpp"],
+//   "src_exclude": [],
+//   "test_pattern": "tests/**/*.cpp",
+//   "planner_hint": "",
+//   "test_hint": "Use TEST and TEST_F macros. EXPECT_EQ for non-fatal, ASSERT_EQ for fatal.",
+//   "coding_hint": ""
+// }
+//
+// Note: Google Test produces JUnit-compatible XML natively via --gtest_output.
+// The build_test_cmd must handle compilation (cmake/make/etc.) — unlike Catch2,
+// there is no built-in compilation step.
+//
+// Go (uses go-json — native go test -json):
+// {
+//   "project_name": "MyGoApp",
+//   "language": "go",
+//   "test_framework": "go-test",
+//   "src_dir": "internal/",
+//   "test_dir": "tests/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".go",
+//   "test_ext": "_test.go",
+//   "build_test_cmd": "go test -json ./... 2>&1",
+//   "report_format": "go-json",
+//   "src_include": ["internal/**/*.go"],
+//   "src_exclude": [],
+//   "test_pattern": "tests/**/*_test.go",
+//   "planner_hint": "",
+//   "test_hint": "Use testing.T with t.Run for subtests.",
+//   "coding_hint": ""
+// }
+//
+// Note: Go convention co-locates test files with source files. This pipeline
+// requires separate src_dir and test_dir for agent isolation. Use a layout like:
+//   internal/  — implementation code (Coding Agent writes here)
+//   tests/     — black-box tests using _test package (Test Agent writes here)
+// The Test Agent should use external test packages (package foo_test) to
+// enforce the same isolation boundary the pipeline uses.
+//
+// Java with Gradle + JUnit 5 (uses junit-xml — Gradle produces it natively):
+// {
+//   "project_name": "MyJavaApp",
+//   "language": "java",
+//   "test_framework": "junit5",
+//   "src_dir": "src/main/java/",
+//   "test_dir": "src/test/java/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".java",
+//   "test_ext": ".java",
+//   "build_test_cmd": "gradle test 2>&1",
+//   "report_format": "junit-xml",
+//   "src_include": ["src/main/java/**/*.java"],
+//   "src_exclude": [],
+//   "test_pattern": "src/test/java/**/*.java",
+//   "planner_hint": "",
+//   "test_hint": "Use @Test, @DisplayName, and Assertions.assertEquals.",
+//   "coding_hint": ""
+// }
+//
+// Note: Gradle writes JUnit XML to build/test-results/test/*.xml (one per
+// test class). The junit-xml parser searches this path automatically.
+// For Maven, use "mvn test 2>&1" — XML goes to target/surefire-reports/.
+//
+// Swift with XCTest (uses exitcode or junit-xml via xcbeautify):
+// {
+//   "project_name": "MySwiftApp",
+//   "language": "swift",
+//   "test_framework": "xctest",
+//   "src_dir": "Sources/",
+//   "test_dir": "Tests/",
+//   "spec_dir": "spec/",
+//   "spec_file": "spec/spec.yaml",
+//   "src_ext": ".swift",
+//   "test_ext": ".swift",
+//   "build_test_cmd": "swift test 2>&1",
+//   "report_format": "exitcode",
+//   "src_include": ["Sources/**/*.swift"],
+//   "src_exclude": [],
+//   "test_pattern": "Tests/**/*.swift",
+//   "planner_hint": "",
+//   "test_hint": "Use XCTAssertEqual, XCTAssertTrue. Tests must import @testable.",
+//   "coding_hint": ""
+// }
+//
+// Note: For per-test detail with Swift, install xcbeautify and use:
+//   "build_test_cmd": "swift test 2>&1 | xcbeautify --report junit --report-path .",
+//   "report_format": "junit-xml"

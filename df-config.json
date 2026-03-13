@@ -1,0 +1,19 @@
+{
+    "project_name": "Terdis",
+    "language": "rust",
+    "test_framework": "cargo",
+    "src_dir": "src/",
+    "test_dir": "tests/",
+    "spec_dir": "spec/",
+    "spec_file": "spec/spec.yaml",
+    "src_ext": ".rs",
+    "test_ext": ".rs",
+    "build_test_cmd": "",
+    "report_format": "cargo-json",
+    "src_include": ["src/**/*.rs"],
+    "src_exclude": [],
+    "test_pattern": "tests/**/*.rs",
+    "planner_hint": "Terdis is a Rust Tetris implementation. Game logic lives in src/. The project uses Cargo — a Cargo.toml must exist at the repo root. Integration tests go in tests/. The pipeline runs `cargo test` with JSON output.",
+    "test_hint": "Write integration tests in tests/ as separate .rs files. Each file is a test binary — do not add a main(). Use #[test] attribute. Reference the crate by name (use terdis::...). Keep tests focused on one spec entry per file.",
+    "coding_hint": "Implement in src/. Use safe Rust only. No external dependencies beyond what is already in Cargo.toml — do not add new crate dependencies. Expose all types and functions needed by tests as pub."
+}
