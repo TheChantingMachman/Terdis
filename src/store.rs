@@ -26,6 +26,10 @@ impl Store {
     pub fn exists(&self, key: &str) -> bool {
         self.data.contains_key(key)
     }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
 }
 
 impl Default for Store {
