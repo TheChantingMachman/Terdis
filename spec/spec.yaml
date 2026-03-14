@@ -240,7 +240,7 @@
     "(empty)". Takes exactly 1 argument; any other arity returns
     "(error) ERR wrong number of arguments for 'KEYS' command".
   tags: [commands, keys, read, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -263,7 +263,7 @@
     its value is overwritten. Returns "OK" on success. Takes exactly
     2 arguments.
   tags: [commands, rename, write, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -275,7 +275,7 @@
     already exists. If key does not exist, returns
     "(error) ERR no such key". Takes exactly 2 arguments.
   tags: [commands, renamenx, write, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -297,7 +297,7 @@
     Takes no arguments; any arguments returns "(error) ERR wrong number of
     arguments for 'FLUSHDB' command".
   tags: [commands, flushdb, write, key-management]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 

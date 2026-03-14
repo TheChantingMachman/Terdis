@@ -30,6 +30,24 @@ impl Store {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn keys(&self) -> Vec<&String> {
+        self.data.keys().collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
+
+    pub fn rename(&mut self, key: &str, newkey: &str) -> bool {
+        match self.data.remove(key) {
+            None => false,
+            Some(val) => {
+                self.data.insert(newkey.to_string(), val);
+                true
+            }
+        }
+    }
 }
 
 impl Default for Store {
