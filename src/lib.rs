@@ -2,7 +2,7 @@ pub mod store;
 pub mod commands;
 
 use store::Store;
-use commands::{cmd_set, cmd_get, cmd_del, cmd_exists, cmd_ping, cmd_echo, cmd_append, cmd_strlen, cmd_mset, cmd_mget, cmd_type, cmd_dbsize};
+use commands::{cmd_set, cmd_get, cmd_del, cmd_exists, cmd_ping, cmd_echo, cmd_append, cmd_strlen, cmd_mset, cmd_mget, cmd_type, cmd_dbsize, cmd_incr, cmd_decr, cmd_incrby, cmd_decrby};
 
 pub fn execute(store: &mut Store, args: &[&str]) -> String {
     if args.is_empty() {
@@ -23,6 +23,10 @@ pub fn execute(store: &mut Store, args: &[&str]) -> String {
         "MGET" => cmd_mget(store, rest),
         "TYPE" => cmd_type(store, rest),
         "DBSIZE" => cmd_dbsize(store, rest),
+        "INCR" => cmd_incr(store, rest),
+        "DECR" => cmd_decr(store, rest),
+        "INCRBY" => cmd_incrby(store, rest),
+        "DECRBY" => cmd_decrby(store, rest),
         _ => format!("(error) ERR unknown command '{}'", cmd),
     }
 }

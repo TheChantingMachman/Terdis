@@ -120,3 +120,88 @@ pub fn cmd_mget(store: &Store, args: &[&str]) -> String {
         .collect();
     values.join("\n")
 }
+
+const ERR_NOT_INT: &str = "(error) ERR value is not an integer or out of range";
+
+fn get_int_value(store: &Store, key: &str) -> Result<i64, String> {
+    match store.get(key) {
+        None => Ok(0),
+        Some(v) => v.parse::<i64>().map_err(|_| ERR_NOT_INT.to_string()),
+    }
+}
+
+pub fn cmd_incr(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 1 {
+        return "(error) ERR wrong number of arguments for 'INCR' command".to_string();
+    }
+    let key = args[0];
+    match get_int_value(store, key) {
+        Err(e) => e,
+        Ok(n) => match n.checked_add(1) {
+            None => ERR_NOT_INT.to_string(),
+            Some(result) => {
+                store.set(key.to_string(), result.to_string());
+                result.to_string()
+            }
+        },
+    }
+}
+
+pub fn cmd_decr(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 1 {
+        return "(error) ERR wrong number of arguments for 'DECR' command".to_string();
+    }
+    let key = args[0];
+    match get_int_value(store, key) {
+        Err(e) => e,
+        Ok(n) => match n.checked_sub(1) {
+            None => ERR_NOT_INT.to_string(),
+            Some(result) => {
+                store.set(key.to_string(), result.to_string());
+                result.to_string()
+            }
+        },
+    }
+}
+
+pub fn cmd_incrby(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 2 {
+        return "(error) ERR wrong number of arguments for 'INCRBY' command".to_string();
+    }
+    let key = args[0];
+    let delta: i64 = match args[1].parse() {
+        Ok(v) => v,
+        Err(_) => return ERR_NOT_INT.to_string(),
+    };
+    match get_int_value(store, key) {
+        Err(e) => e,
+        Ok(n) => match n.checked_add(delta) {
+            None => ERR_NOT_INT.to_string(),
+            Some(result) => {
+                store.set(key.to_string(), result.to_string());
+                result.to_string()
+            }
+        },
+    }
+}
+
+pub fn cmd_decrby(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 2 {
+        return "(error) ERR wrong number of arguments for 'DECRBY' command".to_string();
+    }
+    let key = args[0];
+    let delta: i64 = match args[1].parse() {
+        Ok(v) => v,
+        Err(_) => return ERR_NOT_INT.to_string(),
+    };
+    match get_int_value(store, key) {
+        Err(e) => e,
+        Ok(n) => match n.checked_sub(delta) {
+            None => ERR_NOT_INT.to_string(),
+            Some(result) => {
+                store.set(key.to_string(), result.to_string());
+                result.to_string()
+            }
+        },
+    }
+}
