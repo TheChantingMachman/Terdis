@@ -183,7 +183,7 @@
     "(error) ERR value is not an integer or out of range". Takes exactly
     1 argument.
   tags: [commands, incr, write, integer]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -197,7 +197,7 @@
     "(error) ERR value is not an integer or out of range". Takes exactly
     1 argument.
   tags: [commands, decr, write, integer]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -211,7 +211,7 @@
     as i64, returns "(error) ERR value is not an integer or out of range".
     Takes exactly 2 arguments.
   tags: [commands, incrby, write, integer]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
@@ -225,7 +225,7 @@
     "(error) ERR value is not an integer or out of range". Takes exactly
     2 arguments.
   tags: [commands, decrby, write, integer]
-  status: draft
+  status: implemented
   depends_on:
     - store.kv_store
 
