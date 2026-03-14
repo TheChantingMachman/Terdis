@@ -185,6 +185,90 @@ pub fn cmd_incrby(store: &mut Store, args: &[&str]) -> String {
     }
 }
 
+fn glob_match(pattern: &str, text: &str) -> bool {
+    let p: Vec<char> = pattern.chars().collect();
+    let t: Vec<char> = text.chars().collect();
+    let mut dp = vec![vec![false; t.len() + 1]; p.len() + 1];
+    dp[0][0] = true;
+    for i in 1..=p.len() {
+        if p[i - 1] == '*' {
+            dp[i][0] = dp[i - 1][0];
+        }
+    }
+    for i in 1..=p.len() {
+        for j in 1..=t.len() {
+            if p[i - 1] == '*' {
+                dp[i][j] = dp[i - 1][j] || dp[i][j - 1];
+            } else if p[i - 1] == '?' || p[i - 1] == t[j - 1] {
+                dp[i][j] = dp[i - 1][j - 1];
+            }
+        }
+    }
+    dp[p.len()][t.len()]
+}
+
+pub fn cmd_keys(store: &Store, args: &[&str]) -> String {
+    if args.len() != 1 {
+        return "(error) ERR wrong number of arguments for 'KEYS' command".to_string();
+    }
+    let pattern = args[0];
+    let mut matched: Vec<String> = store
+        .keys()
+        .into_iter()
+        .filter(|k| glob_match(pattern, k))
+        .map(|k| k.clone())
+        .collect();
+    if matched.is_empty() {
+        return "(empty)".to_string();
+    }
+    matched.sort();
+    matched.join("\n")
+}
+
+pub fn cmd_rename(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 2 {
+        return "(error) ERR wrong number of arguments for 'RENAME' command".to_string();
+    }
+    let key = args[0];
+    let newkey = args[1];
+    if key == newkey {
+        if store.exists(key) {
+            return "OK".to_string();
+        } else {
+            return "(error) ERR no such key".to_string();
+        }
+    }
+    if store.rename(key, newkey) {
+        "OK".to_string()
+    } else {
+        "(error) ERR no such key".to_string()
+    }
+}
+
+pub fn cmd_renamenx(store: &mut Store, args: &[&str]) -> String {
+    if args.len() != 2 {
+        return "(error) ERR wrong number of arguments for 'RENAMENX' command".to_string();
+    }
+    let key = args[0];
+    let newkey = args[1];
+    if !store.exists(key) {
+        return "(error) ERR no such key".to_string();
+    }
+    if store.exists(newkey) {
+        return "0".to_string();
+    }
+    store.rename(key, newkey);
+    "1".to_string()
+}
+
+pub fn cmd_flushdb(store: &mut Store, args: &[&str]) -> String {
+    if !args.is_empty() {
+        return "(error) ERR wrong number of arguments for 'FLUSHDB' command".to_string();
+    }
+    store.clear();
+    "OK".to_string()
+}
+
 pub fn cmd_decrby(store: &mut Store, args: &[&str]) -> String {
     if args.len() != 2 {
         return "(error) ERR wrong number of arguments for 'DECRBY' command".to_string();
